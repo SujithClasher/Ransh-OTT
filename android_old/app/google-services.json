@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "127984747130",
+    "project_id": "ransh-ott",
+    "storage_bucket": "ransh-ott.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:127984747130:android:e92f18b72e447747f3f1c3",
+        "android_client_info": {
+          "package_name": "com.ransh.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "127984747130-qfcs6v0br7g0s239vohae525fcpp30kb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ransh.app",
+            "certificate_hash": "01863b6e0ef68a554f1bd33b92d3ecc722924c5c"
+          }
+        },
+        {
+          "client_id": "127984747130-q9l5k3vbv17ghg9ivhl701rlpreq9uta.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC3F-oLCvetg-0dt2GaSQamnCVSL5rylY0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "127984747130-q9l5k3vbv17ghg9ivhl701rlpreq9uta.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
