@@ -87,10 +87,25 @@ class _ShortsPlayerState extends State<ShortsPlayer> {
       httpHeaders: {},
     );
 
-    await controller.initialize();
-    controller.setLooping(true);
+    try {
+      await controller.initialize();
+      controller.setLooping(true);
 
-    _controllers[index] = controller;
+      if (mounted) {
+        setState(() {
+          _controllers[index] = controller;
+        });
+
+        // If the user has scrolled to this video while it was loading, play it now
+        if (index == _currentIndex) {
+          controller.play();
+        }
+      } else {
+        controller.dispose();
+      }
+    } catch (e) {
+      debugPrint('Error initializing video $index: $e');
+    }
   }
 
   /// Unload videos that are no longer needed
@@ -223,17 +238,63 @@ class _ShortsPlayerState extends State<ShortsPlayer> {
     }
 
     // For mobile/tablet, show full-screen vertical video
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Center(
-          child: AspectRatio(
-            aspectRatio: controller.value.aspectRatio,
-            child: VideoPlayer(controller),
+    return GestureDetector(
+      onTap: () {
+        if (controller.value.isPlaying) {
+          controller.pause();
+        } else {
+          controller.play();
+        }
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          SizedBox.expand(
+            child: FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: controller.value.size.width,
+                height: controller.value.size.height,
+                child: VideoPlayer(controller),
+              ),
+            ),
           ),
-        ),
-        _buildOverlay(content),
-      ],
+          // Dark gradient at bottom for text readability
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 200,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black87],
+                ),
+              ),
+            ),
+          ),
+          _buildOverlay(content),
+
+          // Center Play/Pause Icon
+          if (!controller.value.isPlaying)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow,
+                  size: 48,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

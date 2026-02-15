@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ransh_app/models/ransh_content.dart';
 import 'package:ransh_app/providers/auth_provider.dart';
 import 'package:ransh_app/screens/home_screen.dart'; // For ContentCard
+import 'package:ransh_app/screens/subscription_screen.dart';
 import 'package:ransh_app/screens/video_player_screen.dart';
 import 'package:ransh_app/services/device_type_service.dart';
 import 'package:ransh_app/widgets/focusable_card.dart' hide ContentCard;
@@ -39,17 +40,42 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     super.dispose();
   }
 
-  void _playVideo(RanshContent content) {
+  void _playVideo(RanshContent content, List<RanshContent> contextList) async {
+    // Check premium access
+    if (content.isPremium) {
+      final user = ref.read(currentUserProvider);
+      if (user == null) return;
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final isSubscribed = doc.data()?['subscription_status'] == 'active';
+      final isAdmin = doc.data()?['role'] == 'admin';
+
+      if (!isSubscribed && !isAdmin) {
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const SubscriptionScreen()),
+        );
+        return;
+      }
+    }
+
     if (content.isShorts) {
-      // Create a list with just this item for shorts player
-      // In a real app, you might want to find other shorts from search results
+      // Create a list of ALL shorts in the search results
+      final shortsList = contextList.where((c) => c.isShorts).toList();
+      final initialIndex = shortsList.indexWhere((c) => c.id == content.id);
+
       final deviceType = ref.read(deviceTypeStateProvider);
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => ShortsPlayer(
-            shorts: [content],
-            initialIndex: 0,
+            shorts: shortsList,
+            initialIndex: initialIndex != -1 ? initialIndex : 0,
             isTV: deviceType == DeviceType.tv,
             onBack: () => Navigator.pop(context),
           ),
@@ -181,7 +207,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               final content = filtered[index];
               return ContentCard(
                 content: content,
-                onTap: () => _playVideo(content),
+                onTap: () => _playVideo(content, filtered),
                 userSession: userSession,
               );
             },

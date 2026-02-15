@@ -4,7 +4,19 @@ service cloud.firestore {
     
     // --- NEW SECTIONS ---
     
-    // Config: Allow anyone to read (for app languages), only Admin to write (sync)
+    // Config: General config readable by all, but SECURE MUX CREDENTIALS
+    match /config/mux {
+      allow read: if request.auth != null && (
+        request.auth.token.email == 'ssmudakala@gmail.com' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.is_admin == true
+      );
+      allow write: if request.auth != null && (
+        request.auth.token.email == 'ssmudakala@gmail.com' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.is_admin == true
+      );
+    }
+
+    // Other Config: Allow anyone to read (for app languages), only Admin to write (sync)
     match /config/{document=**} {
       allow read: if true;
       allow write: if request.auth != null && (

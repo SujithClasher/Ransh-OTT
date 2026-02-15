@@ -322,7 +322,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               SliverToBoxAdapter(
                 child: HeroBanner(
                   content: heroContent,
-                  onPlay: () => _playContent(heroContent!, isTV),
+                  onPlay: () => _playContent(heroContent!, isTV, allContent),
                   onDetails: () {
                     // Optional: Show details dialog
                   },
@@ -338,7 +338,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: ContentList(
                   title: 'Trending Now',
                   contentList: allContent.take(10).toList(),
-                  onContentTap: (c) => _playContent(c, isTV),
+                  onContentTap: (c) => _playContent(c, isTV, allContent),
                   isTV: isTV,
                   userSession: userSession,
                 ),
@@ -362,7 +362,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   return ContentList(
                     title: categoryName,
                     contentList: categoryContent,
-                    onContentTap: (c) => _playContent(c, isTV),
+                    onContentTap: (c) => _playContent(c, isTV, categoryContent),
                     isTV: isTV,
                     userSession: userSession,
                   );
@@ -377,7 +377,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     padding: const EdgeInsets.all(8.0),
                     child: ContentCard(
                       content: content,
-                      onTap: () => _playContent(content, isTV),
+                      onTap: () => _playContent(content, isTV, allContent),
                       userSession: userSession,
                     ),
                   );
@@ -396,7 +396,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  void _playContent(RanshContent content, bool isTV) async {
+  void _playContent(
+    RanshContent content,
+    bool isTV,
+    List<RanshContent> contextList,
+  ) async {
     // 1. Check for Premium Access
     if (content.isPremium) {
       final user = FirebaseAuth.instance.currentUser;
@@ -425,13 +429,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     if (content.isShorts) {
+      // Filter for ALL shorts from the current list context
+      final shortsList = contextList.where((c) => c.isShorts).toList();
+      final initialIndex = shortsList.indexWhere((c) => c.id == content.id);
+
       // For shorts, we launch a vertical scrolling player
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => ShortsPlayer(
-            shorts: [content], // Pass list
-            initialIndex: 0,
+            shorts: shortsList, // Pass FULL list for scrolling
+            initialIndex: initialIndex != -1 ? initialIndex : 0,
             isTV: isTV,
             onBack: () => Navigator.pop(context),
           ),
@@ -668,7 +676,7 @@ class ContentCard extends StatelessWidget {
                     content.secureThumbnailUrl.isNotEmpty
                         ? RanshImage(
                             imageUrl: content.secureThumbnailUrl,
-                            fit: BoxFit.cover,
+                            fit: BoxFit.fill,
                             errorWidget: Container(
                               color: Colors.grey[900],
                               child: const Icon(

@@ -89,32 +89,19 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
             });
           }
         });
-
-        debugPrint('Mux HLS URL: $_streamUrl');
       }
+
+      debugPrint('[RANSH PLAYER] Content ID: ${widget.content.id}');
+      debugPrint('[RANSH PLAYER] Playback ID: ${widget.content.muxPlaybackId}');
+      debugPrint('[RANSH PLAYER] Stream URL: $_streamUrl');
+      debugPrint('[RANSH PLAYER] isOffline: ${widget.isOffline}');
 
       if (_streamUrl == null || _streamUrl!.isEmpty) {
+        debugPrint('[RANSH PLAYER] ERROR: Stream URL is null or empty!');
         setState(() {
-          _error = 'Unable to load video - No URL found in record';
-          _isLoading = false;
-        });
-        return;
-      }
-
-      // Validate URL (Mux specific check)
-      if (_streamUrl!.contains('stream.mux.com') &&
-          _streamUrl!.endsWith('.m3u8')) {
-        // Basic check, could also try a HEAD request if needed
-      }
-
-      // Ensure Uri parsing doesn't crash
-      try {
-        final uri = Uri.parse(_streamUrl!);
-        if (!uri.hasScheme || !uri.hasAuthority)
-          throw Exception('Invalid URL format');
-      } catch (e) {
-        setState(() {
-          _error = 'Invalid video URL: $_streamUrl';
+          _error =
+              'Unable to load video - No playback URL available.\n'
+              'Playback ID: ${widget.content.muxPlaybackId}';
           _isLoading = false;
         });
         return;
@@ -122,21 +109,44 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
       _controller = VideoPlayerController.networkUrl(
         Uri.parse(_streamUrl!),
+        formatHint: widget.isOffline ? null : VideoFormat.hls,
         httpHeaders: {},
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       );
 
-      await _controller!.initialize();
-      // await _controller!.play(); // Autoplay disabled per user request
-
-      setState(() => _isLoading = false);
-    } catch (e, stack) {
-      debugPrint('Video Error: $e');
-      debugPrint('Stack: $stack');
-      setState(() {
-        _error = 'Error loading video: $e';
-        _isLoading = false;
+      // Listen for player errors
+      _controller!.addListener(() {
+        if (_controller!.value.hasError) {
+          debugPrint(
+            '[RANSH PLAYER] ExoPlayer Error: ${_controller!.value.errorDescription}',
+          );
+          if (mounted && _error == null) {
+            setState(() {
+              _error = 'Playback error: ${_controller!.value.errorDescription}';
+              _isLoading = false;
+            });
+          }
+        }
       });
+
+      debugPrint('[RANSH PLAYER] Initializing controller...');
+      await _controller!.initialize();
+      debugPrint(
+        '[RANSH PLAYER] Controller initialized. Duration: ${_controller!.value.duration}',
+      );
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    } catch (e, stack) {
+      debugPrint('[RANSH PLAYER] FATAL Error: $e');
+      debugPrint('[RANSH PLAYER] Stack: $stack');
+      if (mounted) {
+        setState(() {
+          _error = 'Error loading video: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 

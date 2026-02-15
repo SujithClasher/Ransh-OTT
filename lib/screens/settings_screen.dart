@@ -29,16 +29,14 @@ class SettingsScreen extends ConsumerWidget {
             icon: Icons.privacy_tip,
             title: 'Privacy Policy',
             subtitle: 'Read our privacy policy',
-            onTap: () =>
-                _launchUrl('https://ranshapp.com/privacy'), // Placeholder
+            onTap: () => _launchUrl('https://ransh-ott.web.app/privacy.html'),
           ),
           _buildListTile(
             context,
             icon: Icons.description,
             title: 'Terms of Service',
             subtitle: 'Read our terms of service',
-            onTap: () =>
-                _launchUrl('https://ranshapp.com/terms'), // Placeholder
+            onTap: () => _launchUrl('https://ransh-ott.web.app/terms.html'),
           ),
           _buildListTile(
             context,

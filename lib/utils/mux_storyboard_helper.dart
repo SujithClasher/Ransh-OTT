@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class MuxStoryboardHelper {
@@ -13,17 +14,17 @@ class MuxStoryboardHelper {
       final response = await http.get(Uri.parse(vttUrl));
       if (response.statusCode == 200) {
         final frames = _parseVtt(response.body, playbackId);
-        print(
+        debugPrint(
           'MuxStoryboardHelper: Parsed ${frames.length} frames from $vttUrl',
         );
         return frames;
       } else {
-        print(
+        debugPrint(
           'MuxStoryboardHelper: Failed to fetch VTT ${response.statusCode}',
         );
       }
     } catch (e) {
-      print('Error fetching storyboard: $e');
+      debugPrint('Error fetching storyboard: $e');
     }
     return [];
   }
@@ -38,15 +39,15 @@ class MuxStoryboardHelper {
         ui.decodeImageFromList(bytes, (ui.Image img) {
           completer.complete(img);
         });
-        print('MuxStoryboardHelper: Loaded sprite sheet from $imageUrl');
+        debugPrint('MuxStoryboardHelper: Loaded sprite sheet from $imageUrl');
         return completer.future;
       } else {
-        print(
+        debugPrint(
           'MuxStoryboardHelper: Failed to load sprite sheet ${response.statusCode}',
         );
       }
     } catch (e) {
-      print('Error loading sprite sheet: $e');
+      debugPrint('Error loading sprite sheet: $e');
     }
     return null;
   }

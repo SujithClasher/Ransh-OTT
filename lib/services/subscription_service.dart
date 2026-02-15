@@ -54,18 +54,25 @@ class SubscriptionService {
         _currentStatus =
             data?['subscription_status'] as String? ?? SubscriptionStatus.free;
 
-        final expiryTimestamp = data?['subscription_expiry'] as Timestamp?;
+        // Support both field names (app writes 'subscription_expiry', website writes 'subscription_end')
+        final expiryTimestamp =
+            (data?['subscription_expiry'] ?? data?['subscription_end'])
+                as Timestamp?;
         _currentExpiry = expiryTimestamp?.toDate();
+
+        // Read plan name
+        _currentPlan = data?['subscription_plan'] as String?;
 
         // Cache the subscription status
         await _cacheSubscription();
 
         debugPrint(
-          'Subscription fetched: $_currentStatus (expires: $_currentExpiry)',
+          'Subscription fetched: $_currentStatus, plan: $_currentPlan (expires: $_currentExpiry)',
         );
       } else {
         _currentStatus = SubscriptionStatus.free;
         _currentExpiry = null;
+        _currentPlan = null;
       }
     } catch (e) {
       debugPrint('Error fetching subscription: $e');

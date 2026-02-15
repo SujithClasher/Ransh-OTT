@@ -116,18 +116,31 @@ class DownloadService {
       }
 
       // Download thumbnail if available
-      if (content.thumbnailUrl != null) {
+      if (content.thumbnailUrl != null && content.thumbnailUrl!.isNotEmpty) {
         try {
-          final thumbResponse = await _dio.get<List<int>>(
-            content.thumbnailUrl!,
-            options: Options(responseType: ResponseType.bytes),
-          );
+          final thumbUrl = content.thumbnailUrl!;
 
-          if (thumbResponse.statusCode == 200 && thumbResponse.data != null) {
+          if (thumbUrl.startsWith('data:image')) {
+            // Base64 data URI — decode directly
+            final base64Str = thumbUrl.split(',').last;
+            final bytes = Uint8List.fromList(base64Decode(base64Str));
             await _encryptionService.saveUnencryptedFile(
-              Uint8List.fromList(thumbResponse.data!),
+              bytes,
               '$contentId.jpg',
             );
+          } else {
+            // Normal network URL — download via Dio
+            final thumbResponse = await _dio.get<List<int>>(
+              thumbUrl,
+              options: Options(responseType: ResponseType.bytes),
+            );
+
+            if (thumbResponse.statusCode == 200 && thumbResponse.data != null) {
+              await _encryptionService.saveUnencryptedFile(
+                Uint8List.fromList(thumbResponse.data!),
+                '$contentId.jpg',
+              );
+            }
           }
         } catch (e) {
           Logger.error('Failed to download thumbnail: $e');

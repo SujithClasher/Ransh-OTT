@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ransh Premium — Unlock Full Access</title>
+  <meta name="description"
+    content="Subscribe to Ransh Premium for unlimited access to thousands of cartoons, rhymes, and stories for kids.">
+  <link rel="icon" type="image/png" href="./favicon.jpg">
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <!-- Razorpay Checkout -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+
+<body>
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="spinner"></div>
+    <p>Verifying your account...</p>
+  </div>
+
+  <!-- Auth Error Screen -->
+  <div id="auth-error" class="auth-error hidden">
+    <div class="error-card">
+      <div class="error-icon">🔒</div>
+      <h2>Authentication Required</h2>
+      <p>Please open this page from the Ransh app to subscribe.</p>
+      <a href="#" class="btn-back">Open Ransh App</a>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div id="main-content" class="main-content hidden">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <img src="./favicon.jpg" alt="Ransh OTT" style="height: 40px;">
+      </div>
+      <div id="user-info" class="user-info">
+        <span id="user-email" class="user-email"></span>
+      </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+      <h1>Unlock the Full <span class="gradient-text">Ransh Experience</span></h1>
+      <p class="hero-subtitle">Thousands of cartoons, rhymes, stories — ad-free, in stunning quality.</p>
+    </section>
+
+    <!-- Plans Section -->
+    <section class="plans-section">
+      <div class="plans-grid">
+        <!-- Monthly Plan -->
+        <div class="plan-card" id="plan-monthly" data-plan="monthly">
+          <div class="plan-header">
+            <h3>Monthly Premium</h3>
+            <p class="plan-desc">Full access for 1 month</p>
+          </div>
+          <div class="plan-price">
+            <span class="currency">₹</span>
+            <span class="amount" id="monthly-price">399</span>
+            <span class="period">/month</span>
+          </div>
+          <ul class="plan-features">
+            <li>✓ Unlock All Videos</li>
+            <li>✓ Ad-free Experience</li>
+            <li>✓ HD & 4K Quality</li>
+            <li>✓ Cancel Anytime</li>
+          </ul>
+          <button class="plan-btn" onclick="selectPlan('monthly')">Subscribe Now</button>
+        </div>
+
+        <!-- Lifetime Plan -->
+        <div class="plan-card popular" id="plan-lifetime" data-plan="lifetime">
+          <div class="popular-badge">🔥 BEST VALUE</div>
+          <div class="plan-header">
+            <h3>Lifetime Access</h3>
+            <p class="plan-desc">Pay once, enjoy forever</p>
+          </div>
+          <div class="plan-price">
+            <span class="currency">₹</span>
+            <span class="amount" id="lifetime-price">5,999</span>
+            <span class="period">one-time</span>
+          </div>
+          <ul class="plan-features">
+            <li>✓ Unlock Everything Forever</li>
+            <li>✓ No Monthly Fees</li>
+            <li>✓ VIP Support</li>
+            <li>✓ Early Access to New Content</li>
+          </ul>
+          <button class="plan-btn popular-btn" onclick="selectPlan('lifetime')">Get Lifetime Access</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Success Modal -->
+    <div id="success-modal" class="modal hidden">
+      <div class="modal-content success-modal">
+        <div class="success-icon">🎉</div>
+        <h2>Welcome to Ransh Premium!</h2>
+        <p>Your subscription is now active. Return to the app to enjoy unlimited content.</p>
+        <button class="modal-btn" onclick="returnToApp()">Return to App</button>
+      </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="error-modal" class="modal hidden">
+      <div class="modal-content error-modal">
+        <div class="error-icon-modal">❌</div>
+        <h2>Payment Failed</h2>
+        <p id="error-message">Something went wrong. Please try again.</p>
+        <button class="modal-btn" onclick="closeErrorModal()">Try Again</button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>Secure payment powered by <strong>Razorpay</strong></p>
+      <p class="footer-links">
+        <a href="privacy.html">Privacy Policy</a> · <a href="terms.html">Terms & Conditions</a> · <a
+          href="terms.html#refund-policy">Refund Policy</a>
+      </p>
+      <p class="footer-copyright">© 2026 Ransh OTT. All rights reserved.</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>

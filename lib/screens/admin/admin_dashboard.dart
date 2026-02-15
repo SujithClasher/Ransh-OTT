@@ -227,20 +227,30 @@ class _UploadTabState extends ConsumerState<_UploadTab> {
       );
 
       Logger.success('Video uploaded to Mux');
+      debugPrint('[RANSH UPLOAD] Step 2 DONE — Upload complete');
 
+      if (!mounted) return;
       setState(() {
         _statusMessage = 'Waiting for Mux to process video...';
       });
 
       // 3. Wait for upload to process into an asset
+      debugPrint('[RANSH UPLOAD] Step 3 — Polling for asset ID...');
       final assetId = await muxService.waitForUploadToBecomeAsset(
         uploadId,
         pollInterval: const Duration(seconds: 2),
       );
 
       Logger.info('Asset ID created: $assetId');
+      debugPrint('[RANSH UPLOAD] Step 3 DONE — Asset ID: $assetId');
 
       // 4. Wait for asset to be ready
+      debugPrint('[RANSH UPLOAD] Step 4 — Waiting for asset ready...');
+      if (mounted) {
+        setState(() {
+          _statusMessage = 'Processing video (this may take a minute)...';
+        });
+      }
       final asset = await muxService.waitForAssetReady(
         assetId,
         pollInterval: const Duration(seconds: 2),
@@ -252,13 +262,16 @@ class _UploadTabState extends ConsumerState<_UploadTab> {
       }
 
       Logger.success('Asset ready: $assetId, Playback ID: $playbackId');
+      debugPrint('[RANSH UPLOAD] Step 4 DONE — Playback ID: $playbackId');
 
       // 5. Handle custom thumbnail (Base64 Storage)
       String? customThumbnailUrl;
       if (_selectedCover != null) {
-        setState(() {
-          _statusMessage = 'Encoding custom thumbnail...';
-        });
+        if (mounted) {
+          setState(() {
+            _statusMessage = 'Encoding custom thumbnail...';
+          });
+        }
 
         final coverPath = !kIsWeb ? _selectedCover!.path : null;
         if (coverPath != null) {
@@ -296,6 +309,7 @@ class _UploadTabState extends ConsumerState<_UploadTab> {
           langCode = 'en';
       }
 
+      debugPrint('[RANSH UPLOAD] Step 6 — Saving to Firestore...');
       await FirebaseFirestore.instance.collection('content').add({
         'title': _titleController.text,
         'description': _descController.text,
@@ -316,6 +330,7 @@ class _UploadTabState extends ConsumerState<_UploadTab> {
       });
 
       Logger.success('Content saved to Firestore');
+      debugPrint('[RANSH UPLOAD] Step 6 DONE — Firestore save complete');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -727,6 +742,30 @@ class _UploadTabState extends ConsumerState<_UploadTab> {
 class _ContentTab extends ConsumerWidget {
   const _ContentTab();
 
+  /// Build thumbnail widget — handles both Base64 data URIs and network URLs
+  Widget _buildThumbnail(String url) {
+    if (url.startsWith('data:image')) {
+      try {
+        final base64Str = url.split(',').last;
+        final bytes = base64Decode(base64Str);
+        return Image.memory(
+          bytes,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) =>
+              const Icon(Icons.movie, color: Colors.white54),
+        );
+      } catch (_) {
+        return const Icon(Icons.broken_image, color: Colors.white54);
+      }
+    }
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) =>
+          const Icon(Icons.movie, color: Colors.white54),
+    );
+  }
+
   Future<void> _deleteContent(
     BuildContext context,
     WidgetRef ref,
@@ -862,23 +901,7 @@ class _ContentTab extends ConsumerWidget {
                     child: data['thumbnail_url'] != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(4),
-                            child: Image.network(
-                              data['thumbnail_url'],
-                              fit: BoxFit.cover,
-                              headers: const {
-                                'Cache-Control': 'no-cache',
-                                'Pragma': 'no-cache',
-                              },
-                              errorBuilder: (context, error, stackTrace) {
-                                Logger.error(
-                                  'Thumbnail Error for ${data['title']}: $error',
-                                );
-                                return const Icon(
-                                  Icons.movie,
-                                  color: Colors.white54,
-                                );
-                              },
-                            ),
+                            child: _buildThumbnail(data['thumbnail_url']),
                           )
                         : const Icon(Icons.movie, color: Colors.white54),
                   ),

@@ -254,12 +254,6 @@ class SubscriptionCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         );
-      default:
-        return const LinearGradient(
-          colors: [Color(0xFF9E9E9E), Color(0xFF757575)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        );
     }
   }
 
@@ -270,8 +264,6 @@ class SubscriptionCard extends StatelessWidget {
         return colors.primary;
       case PlanTier.lifetime:
         return colors.secondary;
-      default:
-        return const Color(0xFF9E9E9E);
     }
   }
 }

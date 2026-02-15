@@ -13,8 +13,12 @@ import 'package:ransh_app/providers/ui_providers.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
-  await dotenv.load(fileName: ".env");
+  // Load environment variables (optional — may not exist in release)
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint("Note: .env file not found. Using Firestore/defaults.");
+  }
 
   // Initialize Firebase
   await Firebase.initializeApp();

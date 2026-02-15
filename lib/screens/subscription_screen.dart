@@ -1,14 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ransh_app/models/subscription_plan.dart';
 import 'package:ransh_app/providers/auth_provider.dart';
-import 'package:ransh_app/services/razorpay_service.dart';
 import 'package:ransh_app/services/subscription_service.dart';
 import 'package:ransh_app/widgets/subscription_card.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Netflix-style subscription selection screen
+/// Opens external browser for payment (Play Store compliant — 0% commission)
 class SubscriptionScreen extends ConsumerStatefulWidget {
   const SubscriptionScreen({super.key});
 
@@ -17,27 +19,167 @@ class SubscriptionScreen extends ConsumerStatefulWidget {
 }
 
 class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
-    with SingleTickerProviderStateMixin {
-  late RazorpayService _razorpayService;
-  late TabController _tabController;
-  bool _isLoading = false;
-  String _billingCycle = 'monthly'; // 'monthly' or 'yearly'
+    with WidgetsBindingObserver {
   bool _isLoadingPlans = true;
-  String? _currentPlan; // Track user's current plan
+  String? _currentPlan;
   List<SubscriptionPlan> _plans = [];
+  StreamSubscription? _subscriptionListener;
+  bool _hasShownSuccess = false;
+
+  // ⚠️ Replace with your actual hosted URL
+  static const String _subscriptionWebUrl =
+      'https://ransh-ott.web.app'; // Firebase Hosting URL
 
   @override
   void initState() {
     super.initState();
-    _razorpayService = RazorpayService();
-    _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addObserver(this);
     _initData();
+    _startListeningToSubscription();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _subscriptionListener?.cancel();
+    super.dispose();
+  }
+
+  /// Called when app resumes from background (e.g., returning from browser)
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Re-fetch subscription status when user returns to app
+      _refreshSubscriptionStatus();
+    }
+  }
+
+  bool _isFirstSnapshot = true;
+
+  /// Listen to Firestore user doc for real-time subscription changes
+  void _startListeningToSubscription() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    _subscriptionListener = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .snapshots()
+        .listen((snapshot) {
+          if (!mounted) return;
+
+          final data = snapshot.data();
+          final status = data?['subscription_status'] as String?;
+          final plan = data?['subscription_plan'] as String?;
+
+          // Handle initial state load without triggering dialog
+          if (_isFirstSnapshot) {
+            _isFirstSnapshot = false;
+            // Always update UI state, but silenced dialog
+            setState(() {
+              _currentPlan = plan;
+            });
+            return;
+          }
+
+          // Only show success if we weren't already subscribed/processed
+          // and the status CHANGED to active
+          if (status == 'active' && plan != null) {
+            if (!_hasShownSuccess && _currentPlan != plan) {
+              _hasShownSuccess = true;
+              _onSubscriptionActivated(plan);
+            }
+            // Always update UI state
+            setState(() {
+              _currentPlan = plan;
+            });
+          }
+        });
+  }
+
+  /// Manually re-fetch subscription when returning from browser
+  Future<void> _refreshSubscriptionStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    final status = doc.data()?['subscription_status'] as String?;
+    final plan = doc.data()?['subscription_plan'] as String?;
+
+    if (status == 'active' && plan != null && mounted) {
+      if (!_hasShownSuccess && _currentPlan != plan) {
+        _hasShownSuccess = true;
+        _onSubscriptionActivated(plan);
+      }
+      setState(() {
+        _currentPlan = plan;
+      });
+    }
+  }
+
+  /// Show success and pop back to home
+  void _onSubscriptionActivated(String planName) {
+    // Update local state
+    final subscriptionService = ref.read(subscriptionServiceProvider);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      subscriptionService.fetchSubscription(user.uid);
+    }
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E2C),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green, size: 64),
+            const SizedBox(height: 16),
+            const Text(
+              'Subscription Activated! 🎉',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'You now have $planName access. Enjoy all premium content!',
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Close dialog
+              Navigator.of(this.context).pop(); // Pop back to home
+            },
+            child: const Text(
+              'Start Watching',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _initData() async {
     final subscriptionService = ref.read(subscriptionServiceProvider);
 
-    // Fetch plans first
+    // Fetch plans
     try {
       final fetchedPlans = await subscriptionService.fetchPlans();
       if (mounted) {
@@ -50,115 +192,71 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       debugPrint('Error loading plans: $e');
       if (mounted) {
         setState(() {
-          _plans = SubscriptionPlan.paidPlans; // Fallback
+          _plans = SubscriptionPlan.paidPlans;
           _isLoadingPlans = false;
         });
       }
     }
 
-    // Fetch user status
+    // Fetch user subscription status
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       await subscriptionService.fetchSubscription(user.uid);
       if (mounted) {
         setState(() {
           _currentPlan = subscriptionService.currentPlanName;
+
+          // If already active on load, mark as shown so we don't pop dialog
+          if (_currentPlan != null && _currentPlan!.isNotEmpty) {
+            _hasShownSuccess = true;
+          }
         });
       }
     }
   }
 
-  @override
-  void dispose() {
-    _razorpayService.dispose();
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _onPlanSelected(SubscriptionPlan plan) async {
-    setState(() => _isLoading = true);
-
+  /// Open external browser for subscription payment
+  /// This follows Netflix's model — payments happen on external website
+  /// to avoid Play Store's 30% commission.
+  Future<void> _openSubscriptionWebsite() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Please sign in first')));
-        setState(() => _isLoading = false);
       }
       return;
     }
 
-    final isYearly = _billingCycle == 'yearly';
+    // Build URL with user identification params
+    final params = {
+      'uid': user.uid,
+      'email': user.email ?? '',
+      'name': user.displayName ?? '',
+      'phone': user.phoneNumber ?? '',
+    };
+
+    final uri = Uri.parse(_subscriptionWebUrl).replace(queryParameters: params);
 
     try {
-      await _razorpayService.openCheckout(
-        plan: plan,
-        userEmail: user.email ?? '',
-        userName: user.displayName ?? '',
-        isYearly: isYearly,
-        onSuccess: (response) =>
-            _handlePaymentSuccess(response, plan, isYearly),
-        onFailure: _handlePaymentFailure,
+      // Launch in external browser (NOT WebView) — Play Store compliant
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
       );
+
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not open browser')));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _handlePaymentSuccess(
-    PaymentSuccessResponse response,
-    SubscriptionPlan plan,
-    bool isYearly,
-  ) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      // Activate subscription
-      final subscriptionService = ref.read(subscriptionServiceProvider);
-      await subscriptionService.activateSubscription(
-        userId: user.uid,
-        plan: plan,
-        razorpayPaymentId: response.paymentId ?? '',
-        razorpaySubscriptionId: response.orderId,
-        isYearly: isYearly,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Welcome to ${plan.name}! 🎉'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Activation failed: $e')));
-      }
-    }
-  }
-
-  void _handlePaymentFailure(PaymentFailureResponse response) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Payment failed: ${response.message}'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
   }
 
@@ -185,22 +283,17 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
           ),
           const SizedBox(height: 32),
 
-          // Plans grid
+          // Plans grid (informational — shows what's available)
           Expanded(
             child: _isLoadingPlans
                 ? const Center(child: CircularProgressIndicator())
                 : ListView(
                     padding: const EdgeInsets.all(16),
                     children: _plans.map((plan) {
-                      // Check against tier name (stored in DB) vs current plan
                       final isCurrentPlan = _currentPlan == plan.tier.name;
-
-                      // Identify if user has lifetime access
                       final hasLifetime =
                           _currentPlan ==
                           SubscriptionPlan.lifetimePlan.tier.name;
-
-                      // If user has lifetime, disable monthly plan
                       final isDisabled =
                           hasLifetime && plan.tier == PlanTier.monthly;
 
@@ -210,12 +303,11 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
                           opacity: isDisabled ? 0.5 : 1.0,
                           child: SubscriptionCard(
                             plan: plan,
-                            // No billing cycle choice anymore
                             isYearly: false,
                             isCurrentPlan: isCurrentPlan,
                             onTap: (isCurrentPlan || isDisabled)
-                                ? null // Disable tap for current plan or if disabled
-                                : () => _onPlanSelected(plan),
+                                ? null
+                                : () => _openSubscriptionWebsite(),
                           ),
                         ),
                       );
@@ -223,11 +315,38 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
                   ),
           ),
 
+          // Subscribe Button
+          if (_currentPlan == null || _currentPlan!.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _openSubscriptionWebsite,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Subscribe via Website',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           // Footer info
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              'Cancel anytime. Secure payment via Razorpay.',
+              'Secure payment via Razorpay. Opens in your browser.',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.6),
                 fontSize: 12,

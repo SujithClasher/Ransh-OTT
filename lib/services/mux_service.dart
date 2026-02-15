@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -13,15 +14,42 @@ final muxServiceProvider = Provider((ref) => MuxService());
 class MuxService {
   static const String _baseUrl = 'https://api.mux.com';
 
-  final String _tokenId;
-  final String _tokenSecret;
+  String _tokenId = '';
+  String _tokenSecret = '';
+  bool _credentialsLoaded = false;
 
-  MuxService()
-    : _tokenId = dotenv.env['MUX_TOKEN_ID'] ?? '',
-      _tokenSecret = dotenv.env['MUX_TOKEN_SECRET'] ?? '' {
-    if (_tokenId.isEmpty || _tokenSecret.isEmpty) {
-      throw Exception('Mux credentials not found in environment');
+  MuxService();
+
+  /// Load MUX credentials from Firestore (admin-only) with .env fallback
+  Future<void> _ensureCredentials() async {
+    if (_credentialsLoaded) return;
+
+    try {
+      // Try loading from Firestore (admin-only document)
+      final doc = await FirebaseFirestore.instance
+          .collection('config')
+          .doc('mux')
+          .get();
+
+      if (doc.exists) {
+        _tokenId = doc.data()?['token_id'] as String? ?? '';
+        _tokenSecret = doc.data()?['token_secret'] as String? ?? '';
+      }
+    } catch (e) {
+      debugPrint('Could not load MUX credentials from Firestore: $e');
     }
+
+    // Fallback to dotenv for local development
+    if (_tokenId.isEmpty || _tokenSecret.isEmpty) {
+      _tokenId = dotenv.env['MUX_TOKEN_ID'] ?? '';
+      _tokenSecret = dotenv.env['MUX_TOKEN_SECRET'] ?? '';
+    }
+
+    if (_tokenId.isEmpty || _tokenSecret.isEmpty) {
+      throw Exception('Mux credentials not found');
+    }
+
+    _credentialsLoaded = true;
   }
 
   /// Get authorization header
@@ -38,6 +66,7 @@ class MuxService {
   Future<Map<String, dynamic>> createDirectUpload({
     Duration? maxDuration,
   }) async {
+    await _ensureCredentials();
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/video/v1/uploads'),
@@ -123,6 +152,7 @@ class MuxService {
 
   /// Get upload status
   Future<Map<String, dynamic>> getUploadStatus(String uploadId) async {
+    await _ensureCredentials();
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/video/v1/uploads/$uploadId'),
@@ -142,6 +172,7 @@ class MuxService {
 
   /// Get asset details
   Future<Map<String, dynamic>> getAsset(String assetId) async {
+    await _ensureCredentials();
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/video/v1/assets/$assetId'),
@@ -265,6 +296,7 @@ class MuxService {
     required String assetId, // Kept for backward compatibility/metadata linking
     required File imageFile,
   }) async {
+    await _ensureCredentials();
     try {
       // 1. Create direct upload for the image
       final uploadResponse = await http.post(
@@ -332,6 +364,7 @@ class MuxService {
 
   /// Delete asset
   Future<void> deleteAsset(String assetId) async {
+    await _ensureCredentials();
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/video/v1/assets/$assetId'),
@@ -353,6 +386,7 @@ class MuxService {
   Future<Map<String, dynamic>> createAssetFromUrl({
     required String videoUrl,
   }) async {
+    await _ensureCredentials();
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/video/v1/assets'),
@@ -395,6 +429,10 @@ class MuxService {
   /// Enable MP4 support for an existing asset
   /// Returns true if update was initiated, false if already enabled
   Future<bool> enableMp4Support(String assetId) async {
+    // enableMp4Support calls getAsset which calls _ensureCredentials, but we also call http.put below
+    // so we should ensure credentials here too just to be safe/explicit if getAsset implementation changes
+    await _ensureCredentials();
+
     try {
       final asset = await getAsset(assetId);
       final mp4Support = asset['mp4_support'] as String?;

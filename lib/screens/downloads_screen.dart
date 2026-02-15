@@ -6,6 +6,7 @@ import 'package:ransh_app/screens/video_player_screen.dart';
 import 'package:ransh_app/services/device_type_service.dart';
 import 'dart:io'; // Add dart:io import
 import 'package:ransh_app/widgets/focusable_card.dart';
+import 'package:ransh_app/widgets/shorts_player.dart';
 
 /// Screen to display and manage downloaded videos
 class DownloadsScreen extends ConsumerStatefulWidget {
@@ -72,13 +73,32 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
   }
 
   void _playVideo(RanshContent content) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            VideoPlayerScreen(content: content, isOffline: true),
-      ),
-    );
+    if (content.isShorts) {
+      // Filter for ALL downloaded shorts
+      final shortsList = _downloads.where((c) => c.isShorts).toList();
+      final initialIndex = shortsList.indexWhere((c) => c.id == content.id);
+
+      final deviceType = ref.read(deviceTypeStateProvider);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ShortsPlayer(
+            shorts: shortsList,
+            initialIndex: initialIndex != -1 ? initialIndex : 0,
+            isTV: deviceType == DeviceType.tv,
+            onBack: () => Navigator.pop(context),
+          ),
+        ),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              VideoPlayerScreen(content: content, isOffline: true),
+        ),
+      );
+    }
   }
 
   @override
@@ -294,7 +314,7 @@ class _DownloadThumbnailState extends ConsumerState<_DownloadThumbnail> {
     if (_localFile != null) {
       return Image.file(
         _localFile!,
-        fit: BoxFit.cover,
+        fit: BoxFit.fill,
         errorBuilder: (_, __, ___) => Container(color: Colors.grey[900]),
       );
     }
@@ -305,7 +325,7 @@ class _DownloadThumbnailState extends ConsumerState<_DownloadThumbnail> {
 
     return Image.network(
       widget.remoteUrl,
-      fit: BoxFit.cover,
+      fit: BoxFit.fill,
       errorBuilder: (_, __, ___) => Container(color: Colors.grey[900]),
     );
   }
