@@ -45,7 +45,10 @@ final localStreamServerProvider = Provider<LocalStreamServer>((ref) {
 });
 
 /// Session sentinel provider
+/// keepAlive() is critical — the sentinel holds a Firestore stream listener
+/// that must survive widget rebuilds to properly enforce session concurrency.
 final sessionSentinelProvider = Provider<SessionSentinel>((ref) {
+  ref.keepAlive();
   return SessionSentinel();
 });
 

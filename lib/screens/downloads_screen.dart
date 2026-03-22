@@ -90,12 +90,17 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
           ),
         ),
       );
-    } else {
+      final videoList = _downloads.where((c) => !c.isShorts).toList();
+      final videoIndex = videoList.indexWhere((c) => c.id == content.id);
+
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) =>
-              VideoPlayerScreen(content: content, isOffline: true),
+          builder: (context) => VideoPlayerScreen(
+            contentList: videoList,
+            initialIndex: videoIndex != -1 ? videoIndex : 0,
+            isOffline: true,
+          ),
         ),
       );
     }

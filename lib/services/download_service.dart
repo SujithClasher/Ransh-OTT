@@ -183,6 +183,10 @@ class DownloadService {
       'created_at': content.createdAt?.toIso8601String(),
       'downloaded_at': DateTime.now().toIso8601String(),
       'mux_playback_id': content.muxPlaybackId,
+      'mux_asset_id': content.muxAssetId, // Required for MP4/self-healing
+      'language': content.language,
+      'category': content.category,
+      'access_level': content.accessLevel.name,
     };
 
     metadataMap[content.id] = data;

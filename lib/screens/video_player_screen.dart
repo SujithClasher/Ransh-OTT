@@ -13,12 +13,14 @@ import 'package:ransh_app/services/mux_service.dart';
 
 /// Video player screen for full-length content
 class VideoPlayerScreen extends ConsumerStatefulWidget {
-  final RanshContent content;
+  final List<RanshContent> contentList;
+  final int initialIndex;
   final bool isOffline;
 
   const VideoPlayerScreen({
     super.key,
-    required this.content,
+    required this.contentList,
+    required this.initialIndex,
     this.isOffline = false,
   });
 
@@ -32,39 +34,27 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   String? _error;
   List<MuxQuality> _qualities = [];
   String _currentQualityLabel = 'Auto';
+  String? _streamUrl; 
+  bool _isFullscreen = false;
+  late int _currentIndex;
+
+  RanshContent get _currentContent => widget.contentList[_currentIndex];
 
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex;
     _initializePlayer();
-
-    // Lock to landscape for video playback
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
-
-    // Hide system UI for immersive experience
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
-
-  String? _streamUrl; // Promoted to member variable for casting
 
   @override
   void dispose() {
     _controller?.dispose();
     WakelockPlus.disable(); // Allow screen sleep
 
-    // Restore orientation
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
-
-    // Restore system UI
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    if (_isFullscreen) {
+      _exitFullscreen();
+    }
 
     super.dispose();
   }
@@ -75,14 +65,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       if (widget.isOffline) {
         // Get URL from local server for encrypted playback
         final localServer = ref.read(localStreamServerProvider);
-        final fileName = '${widget.content.id}.mp4';
+        final fileName = '${_currentContent.id}.mp4';
         _streamUrl = localServer.getStreamUrl(fileName);
       } else {
         // Direct HLS URL from Mux
-        _streamUrl = widget.content.playbackUrl;
+        _streamUrl = _currentContent.playbackUrl;
 
         // Fetch available qualities
-        MuxHlsParser.getQualities(widget.content.muxPlaybackId).then((qs) {
+        MuxHlsParser.getQualities(_currentContent.muxPlaybackId).then((qs) {
           if (mounted) {
             setState(() {
               _qualities = qs;
@@ -91,8 +81,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         });
       }
 
-      debugPrint('[RANSH PLAYER] Content ID: ${widget.content.id}');
-      debugPrint('[RANSH PLAYER] Playback ID: ${widget.content.muxPlaybackId}');
+      debugPrint('[RANSH PLAYER] Content ID: ${_currentContent.id}');
+      debugPrint('[RANSH PLAYER] Playback ID: ${_currentContent.muxPlaybackId}');
       debugPrint('[RANSH PLAYER] Stream URL: $_streamUrl');
       debugPrint('[RANSH PLAYER] isOffline: ${widget.isOffline}');
 
@@ -101,7 +91,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         setState(() {
           _error =
               'Unable to load video - No playback URL available.\n'
-              'Playback ID: ${widget.content.muxPlaybackId}';
+              'Playback ID: ${_currentContent.muxPlaybackId}';
           _isLoading = false;
         });
         return;
@@ -151,7 +141,65 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   }
 
   void _goBack() {
-    Navigator.pop(context);
+    if (_isFullscreen) {
+      _toggleFullscreen();
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
+  void _toggleFullscreen() {
+    setState(() {
+      _isFullscreen = !_isFullscreen;
+    });
+
+    if (_isFullscreen) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      _exitFullscreen();
+    }
+  }
+
+  void _exitFullscreen() {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
+
+  Future<void> _playNext() async {
+    if (_currentIndex < widget.contentList.length - 1) {
+      setState(() {
+        _currentIndex++;
+        _isLoading = true;
+        _error = null;
+        _qualities = [];
+        _currentQualityLabel = 'Auto';
+      });
+      await _controller?.dispose();
+      _controller = null;
+      _initializePlayer();
+    }
+  }
+
+  Future<void> _playPrevious() async {
+    if (_currentIndex > 0) {
+      setState(() {
+        _currentIndex--;
+        _isLoading = true;
+        _error = null;
+        _qualities = [];
+        _currentQualityLabel = 'Auto';
+      });
+      await _controller?.dispose();
+      _controller = null;
+      _initializePlayer();
+    }
   }
 
   @override
@@ -176,7 +224,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              'Loading ${widget.content.title}...',
+              'Loading ${_currentContent.title}...',
               style: const TextStyle(color: Colors.white),
             ),
           ],
@@ -213,10 +261,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
             // Custom overlay
             CustomPlayerOverlay(
               controller: _controller!,
-              title: widget.content.title,
+              title: _currentContent.title,
               isTV: isTV,
               showDownload: !widget.isOffline && !isTV,
-              muxPlaybackId: widget.content.muxPlaybackId,
+              muxPlaybackId: _currentContent.muxPlaybackId,
               onBackPressed: _goBack,
               onDownload: !widget.isOffline
                   ? () => _startDownload(context, ref)
@@ -224,6 +272,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
               onQualityChange: !widget.isOffline
                   ? () => _changePlaybackQuality(context)
                   : null,
+              onNext: _currentIndex < widget.contentList.length - 1 ? _playNext : null,
+              onPrevious: _currentIndex > 0 ? _playPrevious : null,
+              onFullscreenToggle: _toggleFullscreen,
+              isFullscreen: _isFullscreen,
             ),
           ],
         ),
@@ -244,7 +296,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     );
 
     try {
-      options = await muxService.getDownloadOptions(widget.content.muxAssetId);
+      options = await muxService.getDownloadOptions(_currentContent.muxAssetId);
     } catch (e) {
       debugPrint('Failed to get options: $e');
     }
@@ -264,7 +316,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       try {
         // Trigger self-healing
         final initiated = await muxService.enableMp4Support(
-          widget.content.muxAssetId,
+          _currentContent.muxAssetId,
         );
         if (!context.mounted) return;
 
@@ -364,7 +416,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
       final downloadService = ref.read(downloadServiceProvider);
       await downloadService.downloadVideo(
-        content: widget.content,
+        content: _currentContent,
         preferredQuality: quality,
         onProgress: (progress) {
           debugPrint('Downloading: ${(progress * 100).toStringAsFixed(0)}%');
@@ -373,7 +425,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text('Downloaded ${widget.content.title}'),
+          content: Text('Downloaded ${_currentContent.title}'),
           backgroundColor: Colors.green,
         ),
       );
@@ -398,7 +450,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Fetching qualities...')));
-      final qs = await MuxHlsParser.getQualities(widget.content.muxPlaybackId);
+      final qs = await MuxHlsParser.getQualities(_currentContent.muxPlaybackId);
       if (mounted) setState(() => _qualities = qs);
     }
 
@@ -529,9 +581,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   }
 
   Future<void> _switchSource(dynamic quality, {bool isRetry = false}) async {
-    // 1. Get current position
+    // 1. Get current position, play state, AND volume before disposing
     final position = _controller?.value.position ?? Duration.zero;
     final wasPlaying = _controller?.value.isPlaying ?? false;
+    final currentVolume = _controller?.value.volume ?? 1.0;
 
     setState(() => _isLoading = true);
 
@@ -549,13 +602,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         label = quality.label;
       } else {
         // Assume 'auto'
-        url = widget.content.playbackUrl; // HLS Master
+        url = _currentContent.playbackUrl; // HLS Master
         label = 'Auto';
       }
 
       // 3. Initialize new controller
       final controller = VideoPlayerController.networkUrl(Uri.parse(url));
       await controller.initialize();
+      // Restore volume from previous controller so audio is never muted on switch
+      await controller.setVolume(currentVolume);
       await controller.seekTo(position);
 
       if (wasPlaying) {

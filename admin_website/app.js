@@ -23,7 +23,7 @@ const FIREBASE_CONFIG = {
 };
 
 // ⚠️  Replace with your Razorpay Key ID
-const RAZORPAY_KEY_ID = "rzp_test_S84YTT1LBy1pFO";
+const RAZORPAY_KEY_ID = "rzp_live_SJQIUH0i5TtaIs";
 
 // Plan definitions (must match Firestore/app plans)
 const PLANS = {
@@ -31,14 +31,14 @@ const PLANS = {
     tier: 'monthly',
     name: 'Monthly Premium',
     description: 'Full access for 1 month',
-    amountInPaise: 39900, // ₹399
+    amountInPaise: 100, // ₹1
     durationDays: 30,
   },
   lifetime: {
     tier: 'lifetime',
     name: 'Lifetime Access',
     description: 'Pay once, enjoy forever',
-    amountInPaise: 599900, // ₹5999
+    amountInPaise: 100, // ₹1
     durationDays: 36500, // ~100 years
   },
 };
@@ -126,9 +126,6 @@ async function authenticateUser() {
     loadingOverlay.classList.add('hidden');
     mainContent.classList.remove('hidden');
 
-    // Try to load dynamic prices from Firestore
-    loadPricesFromFirestore();
-
   } catch (error) {
     console.error('Auth error:', error);
     showAuthError(`Auth Error: ${error.message}`);
@@ -151,31 +148,7 @@ function showAuthError(msg) {
   }
 }
 
-// ============================================================
-// Load prices from Firestore (optional — falls back to hardcoded)
-// ============================================================
-async function loadPricesFromFirestore() {
-  try {
-    const plansSnap = await db.collection('plans').get();
-    plansSnap.forEach(doc => {
-      const data = doc.data();
-      const tier = data.tier || doc.id;
-
-      if (tier === 'monthly' && data.price_monthly) {
-        PLANS.monthly.amountInPaise = data.price_monthly;
-        const el = document.getElementById('monthly-price');
-        if (el) el.textContent = (data.price_monthly / 100).toLocaleString('en-IN');
-      }
-      if (tier === 'lifetime' && data.price_monthly) {
-        PLANS.lifetime.amountInPaise = data.price_monthly;
-        const el = document.getElementById('lifetime-price');
-        if (el) el.textContent = (data.price_monthly / 100).toLocaleString('en-IN');
-      }
-    });
-  } catch (e) {
-    console.log('Using hardcoded prices (Firestore plans not found):', e.message);
-  }
-}
+// Removed dynamic price loading for 1rs testing
 
 // ============================================================
 // Plan Selection → Razorpay Checkout
@@ -192,7 +165,7 @@ function selectPlan(planKey) {
     currency: 'INR',
     name: 'Ransh OTT',
     description: `${plan.name} — ${plan.description}`,
-    image: 'logo.png',
+    image: 'logo.jpg',
     prefill: {
       email: currentUser.email || '',
       name: currentUser.displayName || '',
@@ -205,7 +178,6 @@ function selectPlan(planKey) {
       user_id: targetUid,
     },
     handler: function (response) {
-      // Payment succeeded
       handlePaymentSuccess(response, plan);
     },
     modal: {
@@ -221,9 +193,9 @@ function selectPlan(planKey) {
       handlePaymentFailure(response.error);
     });
     rzp.open();
-  } catch (e) {
-    console.error('Razorpay error:', e);
-    showError('Could not open payment gateway. Please try again.');
+  } catch (error) {
+    console.error('Razorpay initialization error:', error);
+    showError('Could not initialize payment. Please try again.');
   }
 }
 
@@ -231,20 +203,19 @@ function selectPlan(planKey) {
 // Payment Success → Write to Firestore
 // ============================================================
 async function handlePaymentSuccess(response, plan) {
+  loadingOverlay.classList.remove('hidden');
   try {
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
-
-    // Key Fix: Use targetUid (from URL) if available, else fallback to auth uid
     const targetUid = currentUser.targetUid || currentUser.uid;
 
     if (!targetUid) {
       throw new Error("Target User ID missing");
     }
 
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
+
     // 1. Update user document
-    // Note: We are writing to specific fields permissible by the new rules
-    await db.collection('users').doc(targetUid).update({ // Changed .set to .update to match rules
+    await db.collection('users').doc(targetUid).update({
       subscription_status: 'active',
       subscription_plan: plan.tier,
       subscription_start: firebase.firestore.Timestamp.fromDate(now),
@@ -269,15 +240,15 @@ async function handlePaymentSuccess(response, plan) {
       started_at: firebase.firestore.Timestamp.fromDate(now),
       expires_at: firebase.firestore.Timestamp.fromDate(expiresAt),
       created_at: firebase.firestore.FieldValue.serverTimestamp(),
-      source: 'web',
+      source: 'web_client',
       auth_uid: currentUser.uid // Track who actually wrote this (anonymous ID)
     });
 
-
-    // Show success modal
+    loadingOverlay.classList.add('hidden');
     successModal.classList.remove('hidden');
 
   } catch (error) {
+    loadingOverlay.classList.add('hidden');
     console.error('Firestore write error:', error);
     showError('Payment succeeded but subscription activation failed. Please contact support with payment ID: ' + response.razorpay_payment_id);
   }

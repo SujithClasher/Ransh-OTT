@@ -13,6 +13,10 @@ class CustomPlayerOverlay extends StatefulWidget {
   final VoidCallback? onBackPressed;
   final VoidCallback? onDownload;
   final VoidCallback? onQualityChange;
+  final VoidCallback? onNext;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onFullscreenToggle;
+  final bool isFullscreen;
   final String? title;
   final bool isTV;
   final bool showDownload;
@@ -24,6 +28,10 @@ class CustomPlayerOverlay extends StatefulWidget {
     this.onBackPressed,
     this.onDownload,
     this.onQualityChange,
+    this.onNext,
+    this.onPrevious,
+    this.onFullscreenToggle,
+    this.isFullscreen = false,
     this.title,
     this.isTV = false,
     this.showDownload = false,
@@ -56,6 +64,9 @@ class _CustomPlayerOverlayState extends State<CustomPlayerOverlay>
   final FocusNode _lockFocus = FocusNode();
   final FocusNode _backButtonFocus = FocusNode();
   final FocusNode _downloadButtonFocus = FocusNode();
+  final FocusNode _nextFocus = FocusNode();
+  final FocusNode _previousFocus = FocusNode();
+  final FocusNode _fullscreenFocus = FocusNode();
 
   @override
   void initState() {
@@ -106,6 +117,9 @@ class _CustomPlayerOverlayState extends State<CustomPlayerOverlay>
     _lockFocus.dispose();
     _backButtonFocus.dispose();
     _downloadButtonFocus.dispose();
+    _nextFocus.dispose();
+    _previousFocus.dispose();
+    _fullscreenFocus.dispose();
     widget.controller.removeListener(_onControllerUpdate);
     super.dispose();
   }
@@ -351,13 +365,22 @@ class _CustomPlayerOverlayState extends State<CustomPlayerOverlay>
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
+        if (widget.onPrevious != null) ...[
+          _buildFocusableButton(
+            icon: Icons.skip_previous,
+            onPressed: widget.onPrevious!,
+            focusNode: _previousFocus,
+            size: 56,
+          ),
+          const SizedBox(width: 24),
+        ],
         _buildFocusableButton(
           icon: Icons.replay_10,
           onPressed: () => _seekBy(const Duration(seconds: -10)),
           focusNode: _seekBackFocus,
           size: 56,
         ),
-        const SizedBox(width: 48),
+        const SizedBox(width: 24),
         _buildFocusableButton(
           icon: isPlaying ? Icons.pause : Icons.play_arrow,
           onPressed: _togglePlayPause,
@@ -365,13 +388,22 @@ class _CustomPlayerOverlayState extends State<CustomPlayerOverlay>
           size: 80,
           isPrimary: true,
         ),
-        const SizedBox(width: 48),
+        const SizedBox(width: 24),
         _buildFocusableButton(
           icon: Icons.forward_10,
           onPressed: () => _seekBy(const Duration(seconds: 10)),
           focusNode: _seekForwardFocus,
           size: 56,
         ),
+        if (widget.onNext != null) ...[
+          const SizedBox(width: 24),
+          _buildFocusableButton(
+            icon: Icons.skip_next,
+            onPressed: widget.onNext!,
+            focusNode: _nextFocus,
+            size: 56,
+          ),
+        ],
       ],
     );
   }
@@ -445,6 +477,18 @@ class _CustomPlayerOverlayState extends State<CustomPlayerOverlay>
             _formatDuration(duration),
             style: const TextStyle(color: Colors.white, fontSize: 13),
           ),
+          if (widget.onFullscreenToggle != null) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              icon: Icon(
+                widget.isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                color: Colors.white,
+                size: 24,
+              ),
+              tooltip: widget.isFullscreen ? 'Exit Fullscreen' : 'Fullscreen',
+              onPressed: widget.onFullscreenToggle,
+            ),
+          ],
         ],
       ),
     );

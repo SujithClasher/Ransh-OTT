@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class MuxHlsParser {
@@ -6,12 +7,14 @@ class MuxHlsParser {
   static Future<List<MuxQuality>> getQualities(String playbackId) async {
     final url = 'https://stream.mux.com/$playbackId.m3u8';
     try {
-      final response = await http.get(Uri.parse(url));
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         return _parseMasterPlaylist(response.body, url);
       }
     } catch (e) {
-      print('Error fetching HLS master playlist: $e');
+      debugPrint('Error fetching HLS master playlist: $e');
     }
     return [];
   }
@@ -72,12 +75,13 @@ class MuxHlsParser {
             variantUrl = baseUrl + variantUrl;
           }
 
+          final char = masterUrl.contains('?') ? '&' : '?';
           qualities.add(
             MuxQuality(
               label: label,
               height: height,
               bandwidth: bandwidth ?? 0,
-              url: variantUrl,
+              url: '$masterUrl${char}min_resolution=$label&max_resolution=$label',
             ),
           );
         }

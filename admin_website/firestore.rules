@@ -50,7 +50,7 @@ service cloud.firestore {
     match /users/{userId} {
       // Users can read/write their own document
       allow read, write: if request.auth != null && request.auth.uid == userId;
-      
+
       // Allow external website (anonymous/unauth) to update subscription status 
       // ONLY if providing a payment ID. This handles the web-to-app payment flow.
       allow update: if request.resource.data.diff(resource.data).affectedKeys()

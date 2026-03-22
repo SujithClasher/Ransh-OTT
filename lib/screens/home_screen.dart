@@ -33,6 +33,39 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPhoneNumber();
+    });
+  }
+
+  Future<void> _checkPhoneNumber() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final phone = doc.data()?['phone_number'] as String?;
+
+      if (phone == null || phone.isEmpty) {
+        if (!mounted) return;
+        _showPhoneNumberDialog(user.uid);
+      }
+    } catch (e) {
+      debugPrint('Error checking phone number: $e');
+    }
+  }
+
+  void _showPhoneNumberDialog(String uid) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _PhoneNumberDialog(uid: uid),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final userSession = ref.watch(currentUserSessionProvider).valueOrNull;
@@ -406,15 +439,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // Check user document for subscription status
-      // We do a fresh fetch to ensure we have the latest status
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      final isSubscribed = doc.data()?['subscription_status'] == 'active';
-      final isAdmin = doc.data()?['role'] == 'admin';
+      // Use the already-streamed UserSession (includes expiry check)
+      final userSession = ref.read(currentUserSessionProvider).valueOrNull;
+      final isSubscribed = userSession?.hasActiveSubscription ?? false;
+      final isAdmin = userSession?.isAdmin ?? false;
 
       if (!isSubscribed && !isAdmin) {
         if (!mounted) return;
@@ -447,10 +475,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     } else {
       // For full videos
+      final videoList = contextList.where((c) => !c.isShorts).toList();
+      final initialIndex = videoList.indexWhere((c) => c.id == content.id);
+
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => VideoPlayerScreen(content: content),
+          builder: (context) => VideoPlayerScreen(
+            contentList: videoList,
+            initialIndex: initialIndex != -1 ? initialIndex : 0,
+          ),
         ),
       );
     }
@@ -755,6 +789,128 @@ class ContentCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhoneNumberDialog extends StatefulWidget {
+  final String uid;
+
+  const _PhoneNumberDialog({required this.uid});
+
+  @override
+  State<_PhoneNumberDialog> createState() => _PhoneNumberDialogState();
+}
+
+class _PhoneNumberDialogState extends State<_PhoneNumberDialog> {
+  final _phoneController = TextEditingController();
+  bool _isLoading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      setState(() => _error = 'Please enter your mobile number.');
+      return;
+    }
+    if (!RegExp(r'^\d{9,10}$').hasMatch(phone)) {
+      setState(() => _error = 'Please enter a valid 9 or 10 digit mobile number.');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(widget.uid).update({
+        'phone_number': phone,
+      });
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to save phone number. Please try again.';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        backgroundColor: Theme.of(context).dialogBackgroundColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Mobile Number Required', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Please enter your mobile number to continue. This is used to secure your account.',
+              style: TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white10,
+                hintText: 'Enter Mobile Number',
+                hintStyle: TextStyle(color: Colors.grey[500]),
+                prefixIcon: Icon(Icons.phone, color: Theme.of(context).colorScheme.primary),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            ElevatedButton(
+              onPressed: _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Save & Continue', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
         ],
       ),
     );

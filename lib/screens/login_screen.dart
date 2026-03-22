@@ -1,3 +1,5 @@
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ransh_app/providers/auth_provider.dart';
@@ -16,7 +18,6 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isLoading = false;
   String? _error;
-
   @override
   void dispose() {
     super.dispose();
@@ -25,13 +26,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _signIn() async {
     if (_isLoading) return;
 
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
     try {
       await ref.read(signInProvider(context).future);
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        String message;
+        switch (e.code) {
+          case 'network-request-failed':
+            message = 'No internet connection. Please try again.';
+            break;
+          case 'account-exists-with-different-credential':
+            message = 'This email is linked to a different sign-in method.';
+            break;
+          case 'user-disabled':
+            message = 'This account has been disabled. Contact support.';
+            break;
+          default:
+            message = 'Sign in failed. Please try again.';
+        }
+        setState(() {
+          _error = message;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -70,6 +86,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: Column(
             children: [
               const Spacer(), // Pushes content to the bottom
+
               // Sign in button
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),

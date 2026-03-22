@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "source": "functions"
+  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
@@ -8,7 +11,10 @@
     "ignore": [
       "firebase.json",
       ".firebaserc",
-      "README.md"
+      "README.md",
+      "functions/**",
+      "firestore.rules",
+      "firestore.indexes.json"
     ],
     "rewrites": [],
     "headers": [

@@ -82,10 +82,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
       );
     } else {
+      // Create a list of all videos (excluding shorts)
+      final videoList = contextList.where((c) => !c.isShorts).toList();
+      final initialIndex = videoList.indexWhere((c) => c.id == content.id);
+
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => VideoPlayerScreen(content: content),
+          builder: (context) => VideoPlayerScreen(
+            contentList: videoList,
+            initialIndex: initialIndex != -1 ? initialIndex : 0,
+          ),
         ),
       );
     }

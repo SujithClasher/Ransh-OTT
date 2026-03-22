@@ -68,7 +68,6 @@ class _RanshAppState extends ConsumerState<RanshApp> {
           primary: const Color(0xFFFF9933), // Deep Saffron
           secondary: const Color(0xFFFFB703), // Amber Accent (Replaces Gold)
           surface: const Color(0xFF1A1A1A), // Elevated Surface
-          background: Colors.black, // Deep Base
           onPrimary: Colors.black,
           onSecondary: Colors.black,
           onSurface: const Color(0xFFF5F5F5), // Vivid White
@@ -155,7 +154,7 @@ class _AppRouter extends ConsumerWidget {
     return authState.when(
       data: (user) {
         if (user != null) {
-          // Initialize device type detection after login
+          // Initialize device type detection after login (runs only once — guarded inside)
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _detectDeviceType(context, ref);
           });
@@ -184,6 +183,9 @@ class _AppRouter extends ConsumerWidget {
   }
 
   Future<void> _detectDeviceType(BuildContext context, WidgetRef ref) async {
+    // Guard: only detect once — deviceTypeStateProvider starts as null
+    if (ref.read(deviceTypeStateProvider) != null) return;
+
     final deviceTypeService = ref.read(deviceTypeServiceProvider);
     final deviceType = await deviceTypeService.getDeviceType(context);
     ref.read(deviceTypeStateProvider.notifier).state = deviceType;

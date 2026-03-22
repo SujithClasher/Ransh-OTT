@@ -55,7 +55,7 @@ class SubscriptionPlan {
     tier: PlanTier.monthly,
     name: 'Monthly Premium',
     description: 'Full access for 1 month',
-    priceMonthly: 39900, // ₹399
+    priceMonthly: 100, // ₹1
     priceYearly: 0, // Not applicable
     features: [
       'Unlock All Videos',
@@ -72,7 +72,7 @@ class SubscriptionPlan {
     name: 'Lifetime Access',
     description: 'Pay once, enjoy forever',
     priceMonthly:
-        599900, // ₹5999 (Using priceMonthly field to store base price for now to avoid breaking UI consumers immediately, or I just treat it as a one-time price)
+        100, // ₹1
     priceYearly: 0,
     features: [
       'Unlock Everything Forever',

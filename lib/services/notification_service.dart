@@ -32,7 +32,6 @@ class NotificationService {
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       // Get token
       _fcmToken = await _fcm.getToken();
-      debugPrint('FCM Token: $_fcmToken');
 
       // Listen to token refresh
       _fcm.onTokenRefresh.listen((newToken) async {
